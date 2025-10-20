@@ -1,35 +1,131 @@
 package com.devsuperior.dsmovie.controllers;
 
+import com.devsuperior.dsmovie.tests.TokenUtil;
+import io.restassured.http.ContentType;
 import org.json.JSONException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import static io.restassured.RestAssured.*;
+import static org.hamcrest.Matchers.*;
+
 public class MovieControllerRA {
+
+    private Long existingMovieId, notExistingMovieId;
+    private String movieTitle;
+    private String clientUsername, clientPassword, adminUsername, adminPassword, clientToken, adminToken, invalidToken;
+    private Map<String, Object> postMovieInstance;
+
+    @BeforeEach
+    public void setUp()  {
+        baseURI = "http://localhost:8080";
+
+        existingMovieId = 13L;
+        notExistingMovieId = 100L;
+
+        clientUsername = "alex@gmail.com";
+        clientPassword = "123456";
+        clientToken = TokenUtil.obtainAccessToken(clientUsername, clientPassword);
+
+        adminUsername = "maria@gmail.com";
+        adminPassword = "123456";
+        adminToken = TokenUtil.obtainAccessToken(adminUsername, adminPassword);
+
+        invalidToken = adminToken + "xpto";
+
+        movieTitle = "Vingadores";
+
+        postMovieInstance = new HashMap<>();
+        postMovieInstance.put("title", "Test Movie");
+        postMovieInstance.put("score", 0.0);
+        postMovieInstance.put("count", 0);
+        postMovieInstance.put("image", "https://www.themoviedb.org/t/p/w533_and_h300_bestv2/jBJWaqoSCiARWtfV0GlqHrcdidd.jpg");
+    }
 	
 	@Test
 	public void findAllShouldReturnOkWhenMovieNoArgumentsGiven() {
+        given().get("/movies")
+                .then()
+                .statusCode(200)
+                .body("content.title", hasItems("The Witcher", "Venom: Tempo de Carnificina"));
 	}
 	
 	@Test
-	public void findAllShouldReturnPagedMoviesWhenMovieTitleParamIsNotEmpty() {		
+	public void findAllShouldReturnPagedMoviesWhenMovieTitleParamIsNotEmpty() {
+        given().get("/movies?title={movieTitle}", movieTitle)
+                .then()
+                .statusCode(200)
+                .body("content.id[0]", is(13))
+                .body("content.title[0]", equalTo("Vingadores: Ultimato"))
+                .body("content.score[0]", is(0.0F))
+                .body("content.count[0]", is(0))
+                .body("content.image[0]", equalTo("https://www.themoviedb.org/t/p/w533_and_h300_bestv2/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg"));
 	}
 	
 	@Test
-	public void findByIdShouldReturnMovieWhenIdExists() {		
+	public void findByIdShouldReturnMovieWhenIdExists() {
+        given().get("/movies/{id}", existingMovieId)
+                .then()
+                .statusCode(200)
+                .body("id", is(13))
+                .body("title", equalTo("Vingadores: Ultimato"))
+                .body("score", is(0.0F))
+                .body("count", is(0))
+                .body("image", equalTo("https://www.themoviedb.org/t/p/w533_and_h300_bestv2/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg"));
 	}
 	
 	@Test
-	public void findByIdShouldReturnNotFoundWhenIdDoesNotExist() {	
+	public void findByIdShouldReturnNotFoundWhenIdDoesNotExist() {
+        given().get("/movies/{id}", notExistingMovieId)
+                .then()
+                .statusCode(404);
 	}
 	
 	@Test
-	public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndBlankTitle() throws JSONException {		
+	public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndBlankTitle() throws JSONException {
+        postMovieInstance.put("title", "     ");
+
+        given()
+                .header("Content-type", "application/json")
+                .header("Authorization", "Bearer " + adminToken)
+                .body(postMovieInstance)
+                .contentType(ContentType.JSON)
+                .accept(ContentType.JSON)
+                .when()
+                .post("/movies")
+                .then()
+                .statusCode(422)
+                .body("errors.message[0]", equalTo("Campo requerido"));
 	}
 	
 	@Test
-	public void insertShouldReturnForbiddenWhenClientLogged() throws Exception {
+	public void insertShouldReturnForbiddenWhenClientLogged() {
+        given()
+                .header("Content-type", "application/json")
+                .header("Authorization", "Bearer " + clientToken)
+                .body(postMovieInstance)
+                .contentType(ContentType.JSON)
+                .accept(ContentType.JSON)
+                .when()
+                .post("/movies")
+                .then()
+                .statusCode(403);
 	}
 	
 	@Test
 	public void insertShouldReturnUnauthorizedWhenInvalidToken() throws Exception {
+        given()
+                .header("Content-type", "application/json")
+                .header("Authorization", "Bearer " + invalidToken)
+                .body(postMovieInstance)
+                .contentType(ContentType.JSON)
+                .accept(ContentType.JSON)
+                .when()
+                .post("/movies")
+                .then()
+                .statusCode(401);
 	}
 }

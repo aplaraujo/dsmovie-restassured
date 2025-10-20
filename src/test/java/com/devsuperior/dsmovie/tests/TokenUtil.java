@@ -9,11 +9,14 @@ import io.restassured.response.Response;
 
 public class TokenUtil {
 
-	public static String obtainAccessToken(String username, String password) throws JSONException {
-		Response response = authRequest(username, password);
-		JsonPath jsonBody = response.jsonPath();
-		return jsonBody.getString("access_token");
-	}
+    public static String obtainAccessToken(String username, String password) {
+        Response response = authRequest(username, password);
+        response.then().log().all();
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Failed to obtain access token for user: " + username);
+        }
+        return response.jsonPath().getString("access_token");
+    }
 	
 	private static Response authRequest(String username, String password) {
 		return given()
